@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Askaria Tactics v7.1</title>
+  <style>
+    body {
+      background-color: #111;
+      color: white;
+      margin: 0;
+      padding: 0;
+      font-family: 'Trebuchet MS', sans-serif;
+    }
+    .tile {
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      border: 1px solid #555;
+      color: white;
+    }
+    .ground-tile { background: #2a2a2a; }
+    .air-tile { background: #0b2f45; }
+    .map-grid {
+      display: grid;
+      grid-template-columns: repeat(10, 40px);
+      grid-template-rows: repeat(10, 40px);
+      gap: 2px;
+      margin: 60px 10px 10px;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div id="startScreen" style="position:fixed;top:0;left:0;width:100%;height:100%;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999">
+    <div id="loader" style="border: 6px solid #333; border-top: 6px solid #8af0e8; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin-bottom: 20px;"></div>
+    <div id="playerStats" style="margin-top: 20px; color: #8af0e8; font-size: 1.1em;">Gold: <span id="mainGold">0</span> | XP: <span id="mainXP">0</span></div>
+    <h1 style="color:#f8d34d;font-size:3em;margin-bottom:20px">Askaria Tactics</h1>
+    <button onclick="startGame()" style="padding:12px 24px;font-size:1.2em;background:#8af0e8;border:none;border-radius:8px;cursor:pointer">Start Game</button>
+    <div style="margin-top: 30px;">
+      <label for="difficulty" style="color:#ccc;font-size:1.1em;margin-right:10px;">Difficulty:</label>
+      <select id="difficulty" style="padding:6px 12px;font-size:1em;border-radius:5px;background:#222;color:#fff;border:1px solid #555">
+        <option value="easy">Easy</option>
+        <option value="normal" selected>Normal</option>
+        <option value="hard">Hard</option>
+      </select>
+    </div>
+  </div>
+
+  <button onclick="returnToMainScreen()" style="position:absolute;top:10px;left:10px;z-index:10000;background:#f84141;color:#fff;padding:6px 12px;border:none;border-radius:6px;cursor:pointer">⟵ Exit</button>
+  <button onclick="checkVictory()" style="position:absolute;top:10px;right:10px;z-index:10000;background:#8af0e8;color:#000;padding:6px 12px;border:none;border-radius:6px;cursor:pointer">🏁 End Battle</button>
+  <div id="hud">Gold: 0 | Selected Unit: None | Turn: <span id='turnCounter'>0</span></div>
+  <div id="groundMap" class="map-grid"></div>
+  <div id="airMap" class="map-grid"></div>
+
+  <script>
+    let playerGold = 0;
+    let playerXP = 0;
+    let turnCount = 0;
+    let selectedUnit = null;
+    const groundUnits = [
+      { x: 1, y: 3, power: 2, health: 100 },
+      { x: 2, y: 4, power: 1, health: 100 }
+    ];
+    const airUnits = [
+      { x: 2, y: 2, power: 3, health: 100 },
+      { x: 1, y: 1, power: 2, health: 100 }
+    ];
+    const enemyGroundUnits = [
+      { x: 8, y: 3, power: 2, health: 100 },
+      { x: 7, y: 4, power: 1, health: 100 }
+    ];
+    const enemyAirUnits = [
+      { x: 8, y: 1, power: 1, health: 100 }
+    ];
+
+    function startGame() {
+      const loader = document.getElementById('loader');
+      if (loader) loader.style.display = 'block';
+      setTimeout(() => {
+        const screen = document.getElementById('startScreen');
+        if (screen) screen.style.display = 'none';
+        renderAll();
+      }, 1000);
+    }
+
+    function renderMap(units, enemies, mapId, tileClass, icon) {
+      const grid = document.getElementById(mapId);
+      if (!grid) return;
+      requestAnimationFrame(() => {
+        grid.innerHTML = "";
+        for (let y = 0; y < 10; y++) {
+          for (let x = 0; x < 10; x++) {
+            const tile = document.createElement("div");
+            tile.className = `tile ${tileClass}`;
+            const unit = units.find(u => u.x === x && u.y === y);
+            const enemy = enemies.find(e => e.x === x && e.y === y);
+            tile.textContent = unit ? `${icon}${unit.power}` : enemy ? `👾${enemy.power}` : '.';
+            tile.addEventListener('click', () => handleTileClick(x, y, units, enemies));
+            grid.appendChild(tile);
+          }
+        }
+      });
+    }
+
+    function handleTileClick(x, y, units, enemies) {
+      const unit = units.find(u => u.x === x && u.y === y);
+      const enemy = enemies.find(e => e.x === x && e.y === y);
+      if (unit) {
+        selectedUnit = unit;
+        const hud = document.getElementById('hud');
+        if (hud) hud.textContent = `Gold: ${playerGold} | Selected Unit: Power ${unit.power} | Turn: ${turnCount}`;
+      } else if (selectedUnit) {
+        if (enemy) {
+          if (selectedUnit.power >= enemy.power) {
+            selectedUnit.power -= enemy.power;
+            enemies.splice(enemies.indexOf(enemy), 1);
+          }
+        }
+        selectedUnit.x = x;
+        selectedUnit.y = y;
+        selectedUnit = null;
+        turnCount++;
+        const turnCounter = document.getElementById('turnCounter');
+        if (turnCounter) turnCounter.textContent = turnCount;
+        renderAll();
+      }
+    }
+
+    function renderAll() {
+      renderMap(groundUnits, enemyGroundUnits, 'groundMap', 'ground-tile', '🪖');
+      renderMap(airUnits, enemyAirUnits, 'airMap', 'air-tile', '✈️');
+      runEnemyTurn();
+    }
+
+    function runEnemyTurn() {
+      const moveEnemy = (enemyUnits, targetUnits) => {
+        enemyUnits.forEach(enemy => {
+          let closest = null;
+          let minDist = Infinity;
+          targetUnits.forEach(target => {
+            const dist = Math.abs(target.x - enemy.x) + Math.abs(target.y - enemy.y);
+            if (dist < minDist) {
+              minDist = dist;
+              closest = target;
+            }
+          });
+          if (closest) {
+            const dx = closest.x > enemy.x ? 1 : closest.x < enemy.x ? -1 : 0;
+            const dy = closest.y > enemy.y ? 1 : closest.y < enemy.y ? -1 : 0;
+            const newX = enemy.x + dx;
+            const newY = enemy.y + dy;
+            const blocker = enemyUnits.find(e => e !== enemy && e.x === newX && e.y === newY);
+            if (!blocker) {
+              const target = targetUnits.find(t => t.x === newX && t.y === newY);
+              if (target) {
+                if (enemy.power >= target.power) {
+                  enemy.power -= target.power;
+                  targetUnits.splice(targetUnits.indexOf(target), 1);
+                  enemy.x = newX;
+                  enemy.y = newY;
+                }
+              } else {
+                enemy.x = newX;
+                enemy.y = newY;
+              }
+            }
+          }
+        });
+      };
+      moveEnemy(enemyGroundUnits, groundUnits);
+      moveEnemy(enemyAirUnits, airUnits);
+    }
+
+    function returnToMainScreen() {
+      document.getElementById('startScreen').style.display = 'flex';
+      const loader = document.getElementById('loader');
+      if (loader) loader.style.display = 'block';
+      document.getElementById('groundMap').innerHTML = '';
+      document.getElementById('airMap').innerHTML = '';
+      document.getElementById('hud').textContent = `Gold: ${playerGold} | Selected Unit: None | Turn: 0`;
+      turnCount = 0;
+      document.getElementById('mainGold').textContent = playerGold;
+      document.getElementById('mainXP').textContent = playerXP;
+    }
+
+    function checkVictory() {
+      if (enemyGroundUnits.length === 0 && enemyAirUnits.length === 0) {
+        const bonusGold = 50;
+        const bonusXP = 20;
+        alert(`Victory! All enemies eliminated.\n\n+${bonusGold} Gold\n+${bonusXP} XP\nReturning to main screen...`);
+        playerGold += bonusGold;
+        playerXP += bonusXP;
+        returnToMainScreen();
+      } else {
+        alert("Battle not over! Enemies remain on the field.");
+      }
+    }
+  </script>
+</body>
+</html>
